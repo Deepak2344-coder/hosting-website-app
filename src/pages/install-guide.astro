@@ -1,0 +1,41 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import InstallSteps from '../components/InstallSteps.astro';
+---
+
+<BaseLayout title="Install Guide">
+  <section class="bg-white py-20">
+    <div class="mx-auto max-w-3xl px-4">
+      <h1 class="text-3xl font-bold text-gray-900">Installation Guide</h1>
+      <p class="mt-4 text-gray-600">
+        Follow these steps to install NoteDemo on your Android phone. You only need to do this once.
+      </p>
+
+      <div class="mt-10 rounded-xl border border-gray-200 bg-gray-50 p-8">
+        <div class="mb-6 rounded-lg bg-amber-50 p-4 text-sm text-amber-800">
+          <strong>Note:</strong> Since NoteDemo is not on the Play Store, you need to enable installation from unknown sources. This is safe and standard for sideloaded apps.
+        </div>
+
+        <InstallSteps />
+      </div>
+
+      <div class="mt-12 rounded-xl bg-gray-50 p-8">
+        <h2 class="text-xl font-bold text-gray-900">Troubleshooting</h2>
+        <dl class="mt-6 space-y-6">
+          <div>
+            <dt class="font-semibold text-gray-900">Install button is grayed out</dt>
+            <dd class="mt-1 text-sm text-gray-600">Go to Settings → Security → Install unknown apps → Tap your browser → Enable "Allow from this source".</dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-gray-900">"App not installed" error</dt>
+            <dd class="mt-1 text-sm text-gray-600">You may have a newer version already installed. Uninstall the existing app first, then try again.</dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-gray-900">Download won't start</dt>
+            <dd class="mt-1 text-sm text-gray-600">Make sure you have a stable internet connection and enough free storage space.</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

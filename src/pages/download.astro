@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import DownloadButton from '../components/DownloadButton.astro';
+---
+
+<BaseLayout title="Download">
+  <section class="bg-white py-20">
+    <div class="mx-auto max-w-3xl px-4 text-center">
+      <h1 class="text-3xl font-bold text-gray-900">Download NoteDemo</h1>
+      <p class="mt-4 text-gray-600">
+        The latest version of NoteDemo. Install the APK on your Android device.
+      </p>
+
+      <div class="mt-10 rounded-xl border border-gray-200 bg-gray-50 p-8">
+        <div class="mb-6">
+          <span class="inline-block rounded-full bg-primary-100 px-4 py-1 text-sm font-medium text-primary-700">
+            Latest Version
+          </span>
+        </div>
+
+        <div class="mb-8 space-y-2 text-sm text-gray-600">
+          <p><strong>Version:</strong> 1.0.0</p>
+          <p><strong>Size:</strong> Coming soon</p>
+          <p><strong>Requires:</strong> Android 8.0+ (API 26)</p>
+        </div>
+
+        <div class="flex justify-center">
+          <DownloadButton version="1.0.0" size="—" url="#" />
+        </div>
+        <p class="mt-4 text-xs text-gray-400">
+          APK will be available after first release build.
+        </p>
+      </div>
+
+      <div class="mt-12 text-left">
+        <h2 class="text-xl font-bold text-gray-900">Changelog</h2>
+        <div class="mt-4 rounded-lg border border-gray-200 p-6">
+          <h3 class="font-semibold text-gray-900">v1.0.0</h3>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
+            <li>Initial release</li>
+            <li>Email login</li>
+            <li>Content browsing</li>
+            <li>Watermarked page viewer</li>
+            <li>Screenshot protection</li>
+            <li>UPI Autopay subscription</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

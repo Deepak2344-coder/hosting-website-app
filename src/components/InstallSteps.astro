@@ -1,0 +1,38 @@
+---
+const steps = [
+  {
+    title: 'Download the APK',
+    desc: 'Tap the download button on our site. Your browser will save the APK file.',
+  },
+  {
+    title: 'Open the file',
+    desc: 'Open the Downloads folder and tap on notedemo-v1.x.x.apk.',
+  },
+  {
+    title: 'Allow install from unknown sources',
+    desc: 'Android will ask for permission. Tap "Settings" and enable "Allow from this source".',
+  },
+  {
+    title: 'Tap Install',
+    desc: 'After granting permission, tap "Install". The app will be ready in seconds.',
+  },
+  {
+    title: 'Open & Login',
+    desc: 'Open NoteDemo, enter your email, verify with OTP, and you\'re in.',
+  },
+];
+---
+
+<ol class="relative ml-4 border-l-2 border-primary-200">
+  {
+    steps.map((s, i) => (
+      <li class="mb-10 ml-6">
+        <span class="absolute -left-4 flex h-8 w-8 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">
+          {i + 1}
+        </span>
+        <h3 class="text-lg font-semibold text-gray-900">{s.title}</h3>
+        <p class="mt-1 text-sm text-gray-600">{s.desc}</p>
+      </li>
+    ))
+  }
+</ol>
