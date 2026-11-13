@@ -1,14 +1,17 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import DownloadButton from '../components/DownloadButton.astro';
+
+// TODO: confirm repo name if the app repo moves; asset must be named proxinotes.apk
+const apkUrl = 'https://github.com/Deepak2344-coder/Proxinotes-main-repo/releases/latest/download/proxinotes.apk';
 ---
 
 <BaseLayout title="Download">
   <section class="bg-white py-20">
     <div class="mx-auto max-w-3xl px-4 text-center">
-      <h1 class="text-3xl font-bold text-gray-900">Download NoteDemo</h1>
+      <h1 class="text-3xl font-bold text-gray-900">Download ProxiNotes</h1>
       <p class="mt-4 text-gray-600">
-        The latest version of NoteDemo. Install the APK on your Android device.
+        The latest version of ProxiNotes. Install the APK on your Android device.
       </p>
 
       <div class="mt-10 rounded-xl border border-gray-200 bg-gray-50 p-8">
@@ -20,15 +23,15 @@ import DownloadButton from '../components/DownloadButton.astro';
 
         <div class="mb-8 space-y-2 text-sm text-gray-600">
           <p><strong>Version:</strong> 1.0.0</p>
-          <p><strong>Size:</strong> Coming soon</p>
+          <p><strong>Size:</strong> 48.5 MB</p>
           <p><strong>Requires:</strong> Android 8.0+ (API 26)</p>
         </div>
 
         <div class="flex justify-center">
-          <DownloadButton version="1.0.0" size="—" url="#" />
+          <DownloadButton version="1.0.0" size="48.5 MB" url={apkUrl} />
         </div>
         <p class="mt-4 text-xs text-gray-400">
-          APK will be available after first release build.
+          The APK is hosted on GitHub Releases and will be available after the first release is published.
         </p>
       </div>
 
@@ -42,7 +45,7 @@ import DownloadButton from '../components/DownloadButton.astro';
             <li>Content browsing</li>
             <li>Watermarked page viewer</li>
             <li>Screenshot protection</li>
-            <li>UPI Autopay subscription</li>
+            <li>Free access to every chapter</li>
           </ul>
         </div>
       </div>

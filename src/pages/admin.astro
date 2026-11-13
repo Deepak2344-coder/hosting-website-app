@@ -1,0 +1,394 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Admin" description="Manage notes">
+  <div class="mx-auto max-w-5xl px-4 py-8">
+    <div id="config-error" class="hidden rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"></div>
+
+    <section id="login" class="hidden max-w-sm">
+      <h1 class="mb-4 text-2xl font-bold text-gray-900">Admin sign in</h1>
+      <form id="login-form" class="space-y-3">
+        <input id="email" type="email" required autocomplete="username" placeholder="Email"
+          class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-500 focus:outline-none" />
+        <input id="password" type="password" required autocomplete="current-password" placeholder="Password"
+          class="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-primary-500 focus:outline-none" />
+        <button type="submit" class="rounded-lg bg-primary-600 px-6 py-2 text-white hover:bg-primary-700">Sign in</button>
+        <p id="login-error" class="hidden text-sm text-red-600"></p>
+      </form>
+    </section>
+
+    <section id="dash" class="hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-gray-900">Notes admin</h1>
+        <div class="flex items-center gap-3 text-sm">
+          <span id="who" class="text-gray-500"></span>
+          <button id="refresh" class="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50">Refresh</button>
+          <button id="signout" class="rounded-lg border border-gray-300 px-3 py-1.5 hover:bg-gray-50">Sign out</button>
+        </div>
+      </div>
+
+      <p id="status" class="mb-4 min-h-[1.25rem] text-sm text-gray-600" role="status"></p>
+
+      <div class="mb-8 grid gap-6 md:grid-cols-2">
+        <div class="rounded-lg border border-gray-200 bg-white p-4" id="folder-box"></div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4" id="note-box"></div>
+      </div>
+
+      <h2 class="mb-3 text-lg font-semibold text-gray-800">Library</h2>
+      <div id="tree" class="space-y-4"></div>
+
+      <div id="preview" class="mt-8 hidden">
+        <div class="mb-2 flex items-center justify-between">
+          <h2 id="preview-title" class="text-lg font-semibold text-gray-800"></h2>
+          <button id="preview-close" class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50">Close preview</button>
+        </div>
+        <iframe id="preview-frame" sandbox="allow-scripts" title="Note preview"
+          class="h-[600px] w-full rounded-lg border border-gray-300 bg-white"></iframe>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    import { createClient } from '@supabase/supabase-js';
+
+    // No innerHTML anywhere in this file: everything is built with textContent /
+    // setAttribute, so a note or folder name can never inject markup.
+
+    const SUPABASE_URL = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+    const ANON_KEY = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
+
+    type Course = { id: string; name: string };
+    type Subject = { id: string; course_id: string; name: string };
+    type Unit = { id: string; subject_id: string; name: string };
+    type Note = {
+      id: string; unit_id: string; name: string;
+      version: number; size_bytes: number; is_preview: boolean;
+    };
+    type Library = { courses: Course[]; subjects: Subject[]; units: Unit[]; files: Note[] };
+
+    const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const show = (id: string, on: boolean) => $(id).classList.toggle('hidden', !on);
+
+    function el<K extends keyof HTMLElementTagNameMap>(
+      tag: K,
+      props: Record<string, unknown> = {},
+      ...kids: (Node | string | null)[]
+    ): HTMLElementTagNameMap[K] {
+      const e = document.createElement(tag);
+      for (const [k, v] of Object.entries(props)) {
+        if (k === 'class') e.className = String(v);
+        else if (k.startsWith('on') && typeof v === 'function') {
+          e.addEventListener(k.slice(2), v as EventListener);
+        } else if (v !== undefined && v !== null && v !== false) {
+          e.setAttribute(k, v === true ? '' : String(v));
+        }
+      }
+      for (const kid of kids) if (kid !== null) e.append(kid);
+      return e;
+    }
+
+    const INPUT = 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none';
+    const BTN = 'rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50';
+    const BTN_SM = 'rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50';
+    const BTN_DANGER = 'rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50';
+
+    function setStatus(msg: string, isError = false) {
+      const s = $('status');
+      s.textContent = msg;
+      s.className = `mb-4 min-h-[1.25rem] text-sm ${isError ? 'text-red-600' : 'text-gray-600'}`;
+    }
+
+    if (!SUPABASE_URL || !ANON_KEY) {
+      const box = $('config-error');
+      box.textContent = 'Missing PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY. Copy .env.example to .env and rebuild.';
+      show('config-error', true);
+    } else {
+      start(SUPABASE_URL, ANON_KEY);
+    }
+
+    function start(url: string, anon: string) {
+      const supabase = createClient(url, anon);
+      const FN = `${url}/functions/v1`;
+      let lib: Library = { courses: [], subjects: [], units: [], files: [] };
+
+      async function token(): Promise<string> {
+        const { data } = await supabase.auth.getSession();
+        const t = data.session?.access_token;
+        if (!t) throw new Error('Not signed in');
+        return t;
+      }
+
+      async function call(action: string, payload: Record<string, unknown> = {}) {
+        const res = await fetch(`${FN}/admin-api`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${await token()}`, apikey: anon, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, ...payload }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw Object.assign(new Error(body.error ?? `HTTP ${res.status}`), { status: res.status });
+        return body;
+      }
+
+      async function upload(fileId: string, file: File) {
+        const res = await fetch(`${FN}/admin-api?file_id=${encodeURIComponent(fileId)}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${await token()}`, apikey: anon, 'Content-Type': 'text/html' },
+          body: file,
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+        return body as { warnings?: string[] };
+      }
+
+      async function run(label: string, fn: () => Promise<unknown>) {
+        setStatus(`${label}...`);
+        try {
+          await fn();
+          await refresh();
+          setStatus(`${label}: done.`);
+        } catch (e) {
+          setStatus(`${label} failed: ${(e as Error).message}`, true);
+        }
+      }
+
+      // ---------- auth ----------
+      async function enter() {
+        try {
+          await call('whoami');
+        } catch (e) {
+          const status = (e as { status?: number }).status;
+          show('dash', false);
+          show('login', true);
+          const err = $('login-error');
+          err.textContent = status === 403
+            ? 'This account is signed in but is not an admin.'
+            : 'Could not verify admin access.';
+          show('login-error', true);
+          return;
+        }
+        const { data } = await supabase.auth.getUser();
+        $('who').textContent = data.user?.email ?? '';
+        show('login', false);
+        show('dash', true);
+        await refresh();
+      }
+
+      $('login-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        show('login-error', false);
+        const { error } = await supabase.auth.signInWithPassword({
+          email: $<HTMLInputElement>('email').value.trim(),
+          password: $<HTMLInputElement>('password').value,
+        });
+        if (error) {
+          $('login-error').textContent = error.message;
+          show('login-error', true);
+          return;
+        }
+        await enter();
+      });
+      $('signout').addEventListener('click', async () => {
+        await supabase.auth.signOut();
+        show('dash', false);
+        show('login', true);
+      });
+      $('refresh').addEventListener('click', () => run('Refresh', async () => {}));
+      $('preview-close').addEventListener('click', () => {
+        $<HTMLIFrameElement>('preview-frame').srcdoc = '';
+        show('preview', false);
+      });
+
+      // ---------- data ----------
+      async function refresh() {
+        lib = await call('list');
+        renderForms();
+        renderTree();
+      }
+
+      const subjectLabel = (s: Subject) =>
+        `${lib.courses.find((c) => c.id === s.course_id)?.name ?? '?'} / ${s.name}`;
+      const unitLabel = (u: Unit) => {
+        const s = lib.subjects.find((x) => x.id === u.subject_id);
+        return `${s ? subjectLabel(s) : '?'} / ${u.name}`;
+      };
+      const opts = (rows: { id: string }[], label: (r: any) => string) =>
+        rows.map((r) => el('option', { value: r.id }, label(r)));
+
+      // ---------- forms ----------
+      function renderForms() {
+        // Folder form
+        const kind = el('select', { class: INPUT },
+          el('option', { value: 'course' }, 'Course'),
+          el('option', { value: 'subject' }, 'Subject (inside a course)'),
+          el('option', { value: 'unit' }, 'Unit (inside a subject)'));
+        const parent = el('select', { class: INPUT });
+        const fname = el('input', { class: INPUT, placeholder: 'Folder name', maxlength: 120 });
+        const syncParent = () => {
+          parent.replaceChildren(
+            ...(kind.value === 'subject' ? opts(lib.courses, (c) => c.name)
+              : kind.value === 'unit' ? opts(lib.subjects, subjectLabel) : []));
+          parent.classList.toggle('hidden', kind.value === 'course');
+        };
+        kind.addEventListener('change', syncParent);
+        syncParent();
+        $('folder-box').replaceChildren(
+          el('h3', { class: 'mb-3 font-semibold text-gray-800' }, 'Add folder'),
+          el('div', { class: 'space-y-2' }, kind, parent, fname,
+            el('button', {
+              class: BTN,
+              onclick: () => {
+                if (!fname.value.trim()) return setStatus('Enter a folder name.', true);
+                run('Add folder', async () => {
+                  await call('create_folder', {
+                    kind: kind.value, name: fname.value, parent_id: parent.value || undefined,
+                  });
+                });
+              },
+            }, 'Add folder')));
+
+        // Note form
+        const unit = el('select', { class: INPUT }, ...opts(lib.units, unitLabel));
+        const nname = el('input', { class: INPUT, placeholder: 'Note title', maxlength: 120 });
+        const preview = el('input', { type: 'checkbox' });
+        const file = el('input', { type: 'file', accept: '.html,text/html', class: 'text-sm' });
+        const add = el('button', { class: BTN }, 'Upload note');
+        add.addEventListener('click', async () => {
+          const f = file.files?.[0];
+          if (!unit.value) return setStatus('Create a unit first.', true);
+          if (!nname.value.trim()) return setStatus('Enter a note title.', true);
+          if (!f) return setStatus('Choose an .html file (build it with tools/build-note.mjs).', true);
+          add.disabled = true;
+          setStatus('Uploading...');
+          let created: string | null = null;
+          try {
+            const { file: row } = await call('create_note', {
+              unit_id: unit.value, name: nname.value, is_preview: preview.checked,
+            });
+            created = row.id;
+            const res = await upload(row.id, f);
+            await refresh();
+            setStatus(res.warnings?.length ? `Uploaded, with warnings: ${res.warnings.join(' ')}` : 'Uploaded.');
+          } catch (e) {
+            if (created) await call('delete_note', { file_id: created }).catch(() => {});
+            await refresh().catch(() => {});
+            setStatus(`Upload failed: ${(e as Error).message}`, true);
+          } finally {
+            add.disabled = false;
+          }
+        });
+        $('note-box').replaceChildren(
+          el('h3', { class: 'mb-3 font-semibold text-gray-800' }, 'Add note'),
+          el('div', { class: 'space-y-2' }, unit, nname,
+            el('label', { class: 'flex items-center gap-2 text-sm text-gray-600' }, preview, 'Mark as free preview'),
+            file, add));
+      }
+
+      // ---------- tree ----------
+      function folderButtons(kind: 'course' | 'subject' | 'unit', id: string, name: string, notes: number) {
+        return el('span', { class: 'ml-2 inline-flex gap-1' },
+          el('button', {
+            class: BTN_SM,
+            onclick: () => {
+              const n = prompt('New name', name);
+              if (n && n.trim()) run('Rename', () => call('rename_folder', { kind, id, name: n }));
+            },
+          }, 'Rename'),
+          el('button', {
+            class: BTN_DANGER,
+            onclick: () => {
+              if (confirm(`Delete "${name}" and everything inside it (${notes} note${notes === 1 ? '' : 's'})?`)) {
+                run('Delete folder', () => call('delete_folder', { kind, id }));
+              }
+            },
+          }, 'Delete'));
+      }
+
+      function noteRow(n: Note) {
+        const replace = el('input', { type: 'file', accept: '.html,text/html', class: 'hidden' });
+        replace.addEventListener('change', () => {
+          const f = replace.files?.[0];
+          if (f) {
+            run('Replace file', async () => {
+              const res = await upload(n.id, f);
+              if (res.warnings?.length) alert(res.warnings.join('\n'));
+            });
+          }
+        });
+        return el('li', { class: 'flex flex-wrap items-center justify-between gap-2 py-1 text-sm' },
+          el('span', {},
+            n.name,
+            el('span', { class: 'ml-2 text-xs text-gray-400' },
+              n.size_bytes > 0 ? `v${n.version} · ${(n.size_bytes / 1024).toFixed(1)} KB` : 'no file uploaded'),
+            n.is_preview ? el('span', { class: 'ml-2 rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700' }, 'free') : null),
+          el('span', { class: 'inline-flex gap-1' },
+            el('button', { class: BTN_SM, onclick: () => previewNote(n) }, 'Preview'),
+            el('button', { class: BTN_SM, onclick: () => replace.click() }, 'Replace file'),
+            replace,
+            el('button', {
+              class: BTN_SM,
+              onclick: () => {
+                const name = prompt('New title', n.name);
+                if (name && name.trim()) run('Rename note', () => call('update_note', { file_id: n.id, name }));
+              },
+            }, 'Rename'),
+            el('button', {
+              class: BTN_DANGER,
+              onclick: () => {
+                if (confirm(`Delete note "${n.name}"?`)) run('Delete note', () => call('delete_note', { file_id: n.id }));
+              },
+            }, 'Delete')));
+      }
+
+      function renderTree() {
+        const root = $('tree');
+        if (!lib.courses.length) {
+          root.replaceChildren(el('p', { class: 'text-sm text-gray-500' }, 'Nothing here yet. Add a course, then a subject, then a unit.'));
+          return;
+        }
+        root.replaceChildren(...lib.courses.map((c) => {
+          const subjects = lib.subjects.filter((s) => s.course_id === c.id);
+          const count = lib.files.filter((f) => subjects.some((s) => lib.units.some((u) => u.subject_id === s.id && u.id === f.unit_id))).length;
+          return el('div', { class: 'rounded-lg border border-gray-200 bg-white p-4' },
+            el('div', { class: 'font-semibold text-gray-900' }, c.name, folderButtons('course', c.id, c.name, count)),
+            ...subjects.map((s) => {
+              const units = lib.units.filter((u) => u.subject_id === s.id);
+              const subjectNotes = lib.files.filter((f) => units.some((u) => u.id === f.unit_id)).length;
+              return el('div', { class: 'ml-4 mt-3' },
+                el('div', { class: 'font-medium text-gray-800' }, s.name, folderButtons('subject', s.id, s.name, subjectNotes)),
+                ...units.map((u) => {
+                  const notes = lib.files.filter((f) => f.unit_id === u.id);
+                  return el('div', { class: 'ml-4 mt-2' },
+                    el('div', { class: 'text-sm text-gray-700' }, u.name, folderButtons('unit', u.id, u.name, notes.length)),
+                    notes.length ? el('ul', { class: 'ml-4 divide-y divide-gray-100' }, ...notes.map(noteRow)) : null);
+                }));
+            }));
+        }));
+      }
+
+      // ---------- preview ----------
+      async function previewNote(n: Note) {
+        setStatus('Loading preview...');
+        try {
+          const res = await fetch(`${FN}/get-note?id=${encodeURIComponent(n.id)}`, {
+            headers: { Authorization: `Bearer ${await token()}`, apikey: anon },
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const frame = $<HTMLIFrameElement>('preview-frame');
+          frame.srcdoc = await res.text(); // sandbox="allow-scripts": no same-origin access
+          $('preview-title').textContent = `Preview: ${n.name}`;
+          show('preview', true);
+          setStatus('');
+        } catch (e) {
+          setStatus(`Preview failed: ${(e as Error).message}`, true);
+        }
+      }
+
+      // ---------- boot ----------
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) enter();
+        else show('login', true);
+      });
+    }
+  </script>
+</BaseLayout>

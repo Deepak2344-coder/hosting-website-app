@@ -6,35 +6,47 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <section class="bg-white py-20">
     <div class="prose prose-gray mx-auto max-w-3xl px-4">
       <h1 class="text-3xl font-bold text-gray-900">Privacy Policy</h1>
-      <p class="text-sm text-gray-500">Last updated: July 2026</p>
+      <p class="text-sm text-gray-500">Last updated: November 2026</p>
 
       <h2 class="mt-8 text-xl font-semibold text-gray-900">1. Information We Collect</h2>
       <p class="text-gray-600">
-        NoteDemo collects only the information needed to provide the service:
+        ProxiNotes collects only the information needed to provide the service:
       </p>
       <ul class="list-disc pl-5 text-gray-600">
-        <li>Email address (for authentication)</li>
-        <li>Name and roll number (for watermarking)</li>
+        <li>Email address and name (for authentication)</li>
+        <li>Roll number (for watermarking)</li>
         <li>Device information (for device binding)</li>
-        <li>Page access logs (for rate-limiting and analytics)</li>
+        <li>Page access logs (for rate-limiting)</li>
+        <li>App version (for force-update notices)</li>
       </ul>
 
       <h2 class="mt-8 text-xl font-semibold text-gray-900">2. How We Use Your Information</h2>
       <ul class="list-disc pl-5 text-gray-600">
         <li>To authenticate your identity</li>
         <li>To display your name/roll number as a watermark on content</li>
-        <li>To enforce subscription access</li>
+        <li>To watermark each note with your name, roll number, a short account ID and the time you opened it</li>
+        <li>To block screen capture on note content</li>
         <li>To prevent abuse and unauthorized sharing</li>
       </ul>
 
       <h2 class="mt-8 text-xl font-semibold text-gray-900">3. Data Storage</h2>
       <p class="text-gray-600">
-        Your data is stored securely in Supabase (PostgreSQL). We do not share your personal data with third parties except as required to operate the service (Cloudinary for image delivery, Razorpay for payment processing).
+        Your data is stored securely in Supabase (PostgreSQL). Notes you download are stored encrypted on your device.
+        We do not sell your personal data. We do not share your personal data with third parties except as required to operate the service.
+      </p>
+      <p class="text-gray-600">
+        Third parties we rely on: Supabase (backend and database) and Google (sign-in).
       </p>
 
-      <h2 class="mt-8 text-xl font-semibold text-gray-900">4. Contact</h2>
+      <h2 class="mt-8 text-xl font-semibold text-gray-900">4. Your Choices</h2>
+      <ul class="list-disc pl-5 text-gray-600">
+        <li>You can delete your account at any time from the app.</li>
+        <li>You can clear locally downloaded notes from the app's Downloads section.</li>
+      </ul>
+
+      <h2 class="mt-8 text-xl font-semibold text-gray-900">5. Contact</h2>
       <p class="text-gray-600">
-        If you have questions about this policy, please contact the founding team directly.
+        If you have questions about this policy, contact us at <a href="mailto:ddas21702@gmail.com">ddas21702@gmail.com</a>.
       </p>
     </div>
   </section>
