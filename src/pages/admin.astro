@@ -38,6 +38,12 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <h2 class="mb-3 text-lg font-semibold text-gray-800">Library</h2>
       <div id="tree" class="space-y-4"></div>
 
+      <h2 class="mt-8 mb-3 text-lg font-semibold text-gray-800">Notices & Updates</h2>
+      <div class="mb-8 grid gap-6 md:grid-cols-2">
+        <div class="rounded-lg border border-gray-200 bg-white p-4" id="notice-form-box"></div>
+        <div class="rounded-lg border border-gray-200 bg-white p-4" id="notice-list-box"></div>
+      </div>
+
       <div id="preview" class="mt-8 hidden">
         <div class="mb-2 flex items-center justify-between">
           <h2 id="preview-title" class="text-lg font-semibold text-gray-800"></h2>
@@ -204,6 +210,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         lib = await call('list');
         renderForms();
         renderTree();
+        await renderNotices();
       }
 
       const subjectLabel = (s: Subject) =>
@@ -364,6 +371,131 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 }));
             }));
         }));
+      }
+
+      // ---------- notices ----------
+      let notices: any[] = [];
+
+      async function renderNotices() {
+        try {
+          const data = await call('list_notices');
+          notices = data.notices || [];
+        } catch (e) {
+          setStatus('Failed to load notices', true);
+          return;
+        }
+        renderNoticeForm();
+        renderNoticeList();
+      }
+
+      function renderNoticeForm() {
+        const type = el('select', { class: INPUT },
+          el('option', { value: 'info' }, 'Info (popup)'),
+          el('option', { value: 'urgent' }, 'Urgent (blocking)'),
+          el('option', { value: 'update' }, 'Force update'));
+        const title = el('input', { class: INPUT, placeholder: 'Title', maxlength: 200 });
+        const body = el('textarea', { class: INPUT, placeholder: 'Body message', rows: 3, maxlength: 5000 });
+        const linkUrl = el('input', { class: INPUT, placeholder: 'Link URL (optional)' });
+        const linkLabel = el('input', { class: INPUT, placeholder: 'Link button text (optional)' });
+        const priority = el('input', { class: INPUT, type: 'number', placeholder: 'Priority (0-999)', value: '0' });
+        const minVersion = el('input', { class: INPUT, placeholder: 'Min app version (for force update, e.g. 1.0.1)' });
+        const maxVersion = el('input', { class: INPUT, placeholder: 'Max app version (optional)' });
+        const expiresAt = el('input', { class: INPUT, type: 'datetime-local' });
+        const createBtn = el('button', { class: BTN }, 'Create notice');
+        createBtn.addEventListener('click', async () => {
+          if (!title.value.trim()) return setStatus('Title is required', true);
+          if (!body.value.trim()) return setStatus('Body is required', true);
+          createBtn.disabled = true;
+          setStatus('Creating notice...');
+          try {
+            await call('create_notice', {
+              type: type.value,
+              title: title.value.trim(),
+              body: body.value.trim(),
+              link_url: linkUrl.value.trim() || null,
+              link_label: linkLabel.value.trim() || null,
+              priority: parseInt(priority.value) || 0,
+              min_app_version: minVersion.value.trim() || null,
+              max_app_version: maxVersion.value.trim() || null,
+              expires_at: expiresAt.value || null,
+            });
+            title.value = '';
+            body.value = '';
+            linkUrl.value = '';
+            linkLabel.value = '';
+            priority.value = '0';
+            minVersion.value = '';
+            maxVersion.value = '';
+            expiresAt.value = '';
+            await renderNotices();
+            setStatus('Notice created');
+          } catch (e) {
+            setStatus(`Failed: ${(e as Error).message}`, true);
+          } finally {
+            createBtn.disabled = false;
+          }
+        });
+        $('notice-form-box').replaceChildren(
+          el('h3', { class: 'mb-3 font-semibold text-gray-800' }, 'Create notice'),
+          el('div', { class: 'space-y-2' }, type, title, body, linkUrl, linkLabel, priority, minVersion, maxVersion, expiresAt, createBtn),
+          el('p', { class: 'mt-2 text-xs text-gray-500' }, 'Tip: Use type="update" with min_app_version for force updates.'));
+      }
+
+      function renderNoticeList() {
+        if (!notices.length) {
+          $('notice-list-box').replaceChildren(el('p', { class: 'text-sm text-gray-500' }, 'No notices yet.'));
+          return;
+        }
+        const list = el('div', { class: 'space-y-2' });
+        notices.forEach((n: any) => {
+          const item = el('div', { class: 'border border-gray-200 rounded-lg p-3' });
+          const header = el('div', { class: 'flex items-center justify-between mb-2' });
+          const typeBadge = el('span', {
+            class: `px-2 py-0.5 rounded text-xs font-medium ${
+              n.type === 'update' ? 'bg-red-100 text-red-700' :
+              n.type === 'urgent' ? 'bg-orange-100 text-orange-700' :
+              'bg-blue-100 text-blue-700'
+            }`
+          }, n.type.toUpperCase());
+          const statusBadge = el('span', {
+            class: `px-2 py-0.5 rounded text-xs font-medium ${n.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`
+          }, n.is_active ? 'Active' : 'Inactive');
+          header.append(
+            el('span', { class: 'font-medium text-gray-900' }, n.title),
+            el('span', { class: 'flex gap-2' }, typeBadge, statusBadge)
+          );
+          const meta = el('p', { class: 'text-xs text-gray-500 mb-2' },
+            `Priority: ${n.priority} ${n.min_app_version ? `· Min: ${n.min_app_version}` : ''} ${n.expires_at ? `· Expires: ${new Date(n.expires_at).toLocaleDateString()}` : ''}`);
+          const actions = el('div', { class: 'flex gap-2' });
+          actions.append(
+            el('button', { class: BTN_SM, onclick: () => toggleNotice(n.id) }, n.is_active ? 'Deactivate' : 'Activate'),
+            el('button', { class: BTN_DANGER, onclick: () => deleteNotice(n.id) }, 'Delete')
+          );
+          item.append(header, meta, el('p', { class: 'text-sm text-gray-600 mb-2' }, n.body), actions);
+          list.appendChild(item);
+        });
+        $('notice-list-box').replaceChildren(el('h3', { class: 'mb-3 font-semibold text-gray-800' }, 'Notices'), list);
+      }
+
+      async function toggleNotice(id: string) {
+        try {
+          await call('toggle_notice', { id });
+          await renderNotices();
+          setStatus('Notice toggled');
+        } catch (e) {
+          setStatus(`Failed: ${(e as Error).message}`, true);
+        }
+      }
+
+      async function deleteNotice(id: string) {
+        if (!confirm('Delete this notice?')) return;
+        try {
+          await call('delete_notice', { id });
+          await renderNotices();
+          setStatus('Notice deleted');
+        } catch (e) {
+          setStatus(`Failed: ${(e as Error).message}`, true);
+        }
       }
 
       // ---------- preview ----------
